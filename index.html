@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Opus Chat — A beautiful, mobile-first messaging application">
+    <title>Opus Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- ========== SIDEBAR / CONTACTS DRAWER ========== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-brand">
+                    <div class="brand-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                    </div>
+                    <h1>Opus Chat</h1>
+                </div>
+                <button class="btn-icon sidebar-close" id="sidebarClose" aria-label="Close sidebar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="sidebar-search">
+                <div class="search-wrapper">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input type="text" id="searchInput" placeholder="Search conversations…" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="contacts-list" id="contactsList">
+                <!-- Contacts rendered by JS -->
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="avatar avatar-self">
+                        <span>Y</span>
+                    </div>
+                    <div class="user-info">
+                        <span class="user-name">You</span>
+                        <span class="user-status-text">Online</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ========== SIDEBAR OVERLAY (mobile) ========== -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- ========== MAIN CHAT AREA ========== -->
+        <main class="chat-area">
+            <!-- Chat Header -->
+            <header class="chat-header" id="chatHeader">
+                <button class="btn-icon hamburger" id="hamburgerBtn" aria-label="Open contacts">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12" />
+                        <line x1="3" y1="6" x2="21" y2="6" />
+                        <line x1="3" y1="18" x2="21" y2="18" />
+                    </svg>
+                </button>
+                <div class="chat-header-info" id="chatHeaderInfo">
+                    <div class="avatar avatar-header" id="headerAvatar">
+                        <span id="headerAvatarLetter">A</span>
+                        <div class="online-dot" id="headerOnlineDot"></div>
+                    </div>
+                    <div class="header-text">
+                        <h2 id="headerName">Alice Johnson</h2>
+                        <span class="header-status" id="headerStatus">Online</span>
+                    </div>
+                </div>
+                <div class="chat-header-actions">
+                    <button class="btn-icon" aria-label="Voice call" title="Voice call">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path
+                                d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+                        </svg>
+                    </button>
+                    <button class="btn-icon" aria-label="Video call" title="Video call">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="23 7 16 12 23 17 23 7" />
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Welcome screen (no chat selected or initial) -->
+            <div class="welcome-screen" id="welcomeScreen" style="display:none;">
+                <div class="welcome-content">
+                    <div class="welcome-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                    </div>
+                    <h2>Welcome to Opus Chat</h2>
+                    <p>Select a conversation to start messaging</p>
+                </div>
+            </div>
+
+            <!-- Messages Container -->
+            <div class="messages-container" id="messagesContainer">
+                <div class="messages-list" id="messagesList">
+                    <!-- Messages rendered by JS -->
+                </div>
+
+                <!-- Typing Indicator -->
+                <div class="typing-indicator" id="typingIndicator" style="display:none;">
+                    <div class="avatar avatar-small">
+                        <span id="typingAvatar">A</span>
+                    </div>
+                    <div class="typing-bubble">
+                        <div class="typing-dots">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message Input Bar -->
+            <footer class="message-input-bar" id="messageInputBar">
+                <button class="btn-icon emoji-btn" id="emojiBtn" aria-label="Toggle emoji picker" title="Emoji">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                        <line x1="9" y1="9" x2="9.01" y2="9" />
+                        <line x1="15" y1="9" x2="15.01" y2="9" />
+                    </svg>
+                </button>
+
+                <!-- Emoji Picker -->
+                <div class="emoji-picker" id="emojiPicker" style="display:none;">
+                    <div class="emoji-grid" id="emojiGrid">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+                <div class="input-wrapper">
+                    <textarea id="messageInput" placeholder="Type a message…" rows="1" autocomplete="off"></textarea>
+                </div>
+
+                <button class="btn-send" id="sendBtn" aria-label="Send message" title="Send" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                </button>
+            </footer>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
