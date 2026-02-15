@@ -24,15 +24,16 @@ const EMOJIS = [
 
 // ─────────────── STATE ───────────────
 let allModels = [];          // from puter.ai.listModels()
-let activeChat = null;       // { type: '1on1'|'group'|'endless', id }
+let activeChat = null;       // { type: '1on1'|'group'|'endless'|'custom', id }
 let chatHistories = {};
 let groups = [];             // [{ id, name, members: [modelId, ...] }]
 let endlessChats = [];       // [{ id, name, members: [modelId, modelId] }]
+let customContacts = [];     // [modelId, ...] — user-added 1:1 chats
 let isAiResponding = false;
 let endlessRunning = false;
 let endlessAbortFlag = false;
 let selectedModelIds = new Set();
-let modalMode = 'group';     // 'group' or 'endless'
+let modalMode = 'group';     // 'group', 'endless', or 'custom1on1'
 
 // ─────────────── DOM ───────────────
 const $ = id => document.getElementById(id);
@@ -46,8 +47,12 @@ const groupsList = $('groupsList');
 const groupLabel = $('groupLabel');
 const endlessList = $('endlessList');
 const endlessLabel = $('endlessLabel');
+const customList = $('customList');
+const customLabel = $('customLabel');
 const newGroupBtn = $('newGroupBtn');
 const newEndlessBtn = $('newEndlessBtn');
+const newCustomBtn = $('newCustomBtn');
+const deleteChatBtn = $('deleteChatBtn');
 
 const headerAvatar = $('headerAvatar');
 const headerAvatarLetter = $('headerAvatarLetter');
@@ -88,6 +93,7 @@ async function init() {
     renderContacts();
     renderGroups();
     renderEndlessChats();
+    renderCustomChats();
     buildEmojiPicker();
     bindEvents();
 
@@ -167,13 +173,14 @@ function loadState() {
             chatHistories = data.chatHistories || {};
             groups = data.groups || [];
             endlessChats = data.endlessChats || [];
+            customContacts = data.customContacts || [];
         }
     } catch (e) { }
 }
 
 function saveState() {
     try {
-        localStorage.setItem('opus_ai_chat_v2', JSON.stringify({ chatHistories, groups, endlessChats }));
+        localStorage.setItem('opus_ai_chat_v2', JSON.stringify({ chatHistories, groups, endlessChats, customContacts }));
     } catch (e) { }
 }
 
@@ -258,6 +265,36 @@ function renderEndlessChats() {
     }).join('');
 }
 
+function renderCustomChats() {
+    if (customContacts.length === 0) { customLabel.style.display = 'none'; customList.innerHTML = ''; return; }
+    customLabel.style.display = '';
+    customList.innerHTML = customContacts.map((modelId, i) => {
+        const m = getModelInfo(modelId);
+        const msgs = chatHistories['custom_' + modelId] || [];
+        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        const isActive = activeChat && activeChat.type === 'custom' && activeChat.id === modelId;
+        return `
+            <div class="contact-item${isActive ? ' active' : ''}"
+                 data-type="custom" data-id="${modelId}"
+                 style="animation-delay:${i * 0.04}s">
+                <div class="avatar ${m.avatarClass}">
+                    <span>${m.avatar}</span>
+                    <div class="online-dot"></div>
+                </div>
+                <div class="contact-details">
+                    <div class="contact-top-row">
+                        <span class="contact-name">${m.name}</span>
+                        <span class="contact-time">${lastMsg ? lastMsg.time : ''}</span>
+                    </div>
+                    <div class="contact-bottom-row">
+                        <span class="contact-last-msg">${lastMsg ? truncate(lastMsg.text, 28) : m.id}</span>
+                        <span class="model-badge">${m.vendor || 'Custom'}</span>
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+}
+
 function truncate(str, len) { return str.length > len ? str.substring(0, len) + '…' : str; }
 
 // ─────────────── GET MODEL INFO ───────────────
@@ -285,12 +322,12 @@ function selectChat(type, id) {
 
     activeChat = { type, id };
 
-    if (type === '1on1') {
+    if (type === '1on1' || type === 'custom') {
         const m = getModelInfo(id);
         headerAvatarLetter.textContent = m.avatar;
         headerAvatar.className = `avatar avatar-header ${m.avatarClass}`;
         headerName.textContent = m.name;
-        headerStatus.textContent = `${m.vendor} · Ready`;
+        headerStatus.textContent = `${m.vendor || 'AI'} · Ready`;
     } else if (type === 'group') {
         const group = groups.find(g => g.id === id);
         if (!group) return;
@@ -307,6 +344,9 @@ function selectChat(type, id) {
         headerStatus.textContent = ec.members.map(mid => getModelInfo(mid).name).join(' vs ');
     }
 
+    // Show/hide delete button (only for groups, endless, custom — not featured 1:1)
+    deleteChatBtn.style.display = (type === 'group' || type === 'endless' || type === 'custom') ? '' : 'none';
+
     welcomeScreen.style.display = 'none';
     messagesContainer.style.display = '';
     messageInputBar.style.display = '';
@@ -322,6 +362,7 @@ function selectChat(type, id) {
     renderContacts();
     renderGroups();
     renderEndlessChats();
+    renderCustomChats();
     closeSidebar();
     setTimeout(() => messageInput.focus(), 350);
 }
@@ -345,7 +386,9 @@ function showNormalMode() {
 // ─────────────── RENDER MESSAGES ───────────────
 function renderMessages() {
     if (!activeChat) return;
-    const msgs = chatHistories[activeChat.id] || [];
+    // Custom chats use 'custom_' prefix in chatHistories
+    const chatKey = activeChat.type === 'custom' ? 'custom_' + activeChat.id : activeChat.id;
+    const msgs = chatHistories[chatKey] || [];
     const isGroupLike = activeChat.type === 'group' || activeChat.type === 'endless';
 
     let html = '<div class="date-separator"><span>Today</span></div>';
@@ -438,18 +481,19 @@ async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text || !activeChat || isAiResponding) return;
 
+    const chatKey = activeChat.type === 'custom' ? 'custom_' + activeChat.id : activeChat.id;
     const time = formatTime(new Date());
-    if (!chatHistories[activeChat.id]) chatHistories[activeChat.id] = [];
-    chatHistories[activeChat.id].push({ from: 'me', text, time });
+    if (!chatHistories[chatKey]) chatHistories[chatKey] = [];
+    chatHistories[chatKey].push({ from: 'me', text, time });
     saveState();
     appendMessage('me', text, time);
     messageInput.value = '';
     autoResizeInput();
     updateSendButton();
-    renderContacts(); renderGroups(); renderEndlessChats();
+    renderContacts(); renderGroups(); renderEndlessChats(); renderCustomChats();
 
-    if (activeChat.type === '1on1') {
-        await triggerAiReply(activeChat.id);
+    if (activeChat.type === '1on1' || activeChat.type === 'custom') {
+        await triggerAiReply(chatKey, activeChat.id);
     } else if (activeChat.type === 'group') {
         await triggerGroupReply(activeChat.id);
     } else if (activeChat.type === 'endless') {
@@ -458,14 +502,14 @@ async function sendMessage() {
 }
 
 // ─────────────── 1:1 AI REPLY ───────────────
-async function triggerAiReply(modelId) {
+async function triggerAiReply(chatKey, modelId) {
     const model = getModelInfo(modelId);
     isAiResponding = true;
     updateSendButton();
     showTypingIndicator(model);
 
     try {
-        const history = (chatHistories[modelId] || []).slice(-20);
+        const history = (chatHistories[chatKey] || []).slice(-20);
         const messages = [
             { role: 'system', content: `You are ${model.name}. Keep responses concise (2-3 sentences). Be helpful, friendly, conversational.` },
             ...history.map(msg => ({
@@ -480,20 +524,21 @@ async function triggerAiReply(modelId) {
         const replyText = extractResponseText(response);
         const time = formatTime(new Date());
 
-        if (!chatHistories[modelId]) chatHistories[modelId] = [];
-        chatHistories[modelId].push({
+        if (!chatHistories[chatKey]) chatHistories[chatKey] = [];
+        chatHistories[chatKey].push({
             from: 'ai', text: replyText, time,
             senderName: model.name, senderAvatar: model.avatar, senderAvatarClass: model.avatarClass,
         });
         saveState();
 
-        if (activeChat && activeChat.id === modelId) {
+        const currentKey = activeChat ? (activeChat.type === 'custom' ? 'custom_' + activeChat.id : activeChat.id) : null;
+        if (currentKey === chatKey) {
             appendMessage('ai', replyText, time, model.name, model.avatar, model.avatarClass);
         }
-        renderContacts();
+        renderContacts(); renderCustomChats();
     } catch (err) {
         hideTypingIndicator();
-        handleAiError(modelId, model, err);
+        handleAiError(chatKey, model, err);
     }
 
     isAiResponding = false;
@@ -678,11 +723,20 @@ function openModal(mode) {
         nameLabel.textContent = 'Group Name';
         groupNameInput.placeholder = 'e.g. AI Think Tank';
         modalCreateBtn.textContent = 'Create Group';
-    } else {
+        nameLabel.style.display = '';
+        groupNameInput.style.display = '';
+    } else if (mode === 'endless') {
         modalTitle.textContent = 'Create Endless Chat';
         nameLabel.textContent = 'Chat Name';
         groupNameInput.placeholder = 'e.g. GPT vs Claude';
         modalCreateBtn.textContent = 'Create Endless Chat';
+        nameLabel.style.display = '';
+        groupNameInput.style.display = '';
+    } else if (mode === 'custom1on1') {
+        modalTitle.textContent = 'New AI Chat';
+        nameLabel.style.display = 'none';
+        groupNameInput.style.display = 'none';
+        modalCreateBtn.textContent = 'Start Chat';
     }
 
     groupNameInput.value = '';
@@ -690,6 +744,7 @@ function openModal(mode) {
     renderModelList('');
     updateSelectionCount();
     groupModal.style.display = 'flex';
+    setTimeout(() => modelSearchInput.focus(), 200);
 }
 
 function closeModal() { groupModal.style.display = 'none'; }
@@ -726,13 +781,16 @@ function renderModelList(filter) {
 }
 
 function toggleModelSelection(modelId) {
-    if (modalMode === 'endless') {
+    if (modalMode === 'custom1on1') {
+        // Only 1 for custom 1:1
+        selectedModelIds.clear();
+        selectedModelIds.add(modelId);
+    } else if (modalMode === 'endless') {
         // Limit to 2 for endless
         if (selectedModelIds.has(modelId)) {
             selectedModelIds.delete(modelId);
         } else {
             if (selectedModelIds.size >= 2) {
-                // Remove oldest selection
                 const first = selectedModelIds.values().next().value;
                 selectedModelIds.delete(first);
             }
@@ -754,7 +812,9 @@ function toggleModelSelection(modelId) {
 
 function updateSelectionCount() {
     const count = selectedModelIds.size;
-    if (modalMode === 'endless') {
+    if (modalMode === 'custom1on1') {
+        selectionCount.textContent = `(${count}/1 selected)`;
+    } else if (modalMode === 'endless') {
         selectionCount.textContent = `(${count}/2 selected)`;
     } else {
         selectionCount.textContent = `(${count} selected)`;
@@ -764,7 +824,21 @@ function updateSelectionCount() {
 function createFromModal() {
     const name = groupNameInput.value.trim();
 
-    if (modalMode === 'endless') {
+    if (modalMode === 'custom1on1') {
+        if (selectedModelIds.size !== 1) {
+            modelSearchInput.value = '';
+            modelSearchInput.placeholder = '⚠️ Select 1 model!';
+            return;
+        }
+        const modelId = [...selectedModelIds][0];
+        if (!customContacts.includes(modelId)) {
+            customContacts.push(modelId);
+            saveState();
+        }
+        closeModal();
+        renderCustomChats();
+        selectChat('custom', modelId);
+    } else if (modalMode === 'endless') {
         if (selectedModelIds.size !== 2) {
             groupNameInput.value = '';
             groupNameInput.placeholder = '⚠️ Select exactly 2 models!';
@@ -804,10 +878,40 @@ function createFromModal() {
 function clearCurrentChat() {
     if (!activeChat) return;
     if (endlessRunning && activeChat.type === 'endless') stopEndless();
-    chatHistories[activeChat.id] = [];
+    const chatKey = activeChat.type === 'custom' ? 'custom_' + activeChat.id : activeChat.id;
+    chatHistories[chatKey] = [];
     saveState();
     renderMessages();
-    renderContacts(); renderGroups(); renderEndlessChats();
+    renderContacts(); renderGroups(); renderEndlessChats(); renderCustomChats();
+}
+
+// ─────────────── DELETE CHAT ───────────────
+function deleteCurrentChat() {
+    if (!activeChat) return;
+    const { type, id } = activeChat;
+
+    if (type === 'group') {
+        groups = groups.filter(g => g.id !== id);
+        delete chatHistories[id];
+    } else if (type === 'endless') {
+        if (endlessRunning) stopEndless();
+        endlessChats = endlessChats.filter(e => e.id !== id);
+        delete chatHistories[id];
+    } else if (type === 'custom') {
+        customContacts = customContacts.filter(mid => mid !== id);
+        delete chatHistories['custom_' + id];
+    } else {
+        return; // Can't delete featured 1:1 chats
+    }
+
+    saveState();
+    activeChat = null;
+
+    // Go back to first featured model
+    renderGroups(); renderEndlessChats(); renderCustomChats();
+    if (FEATURED_MODELS.length > 0) {
+        selectChat('1on1', FEATURED_MODELS[0].id);
+    }
 }
 
 // ─────────────── EMOJI ───────────────
@@ -843,7 +947,7 @@ function bindEvents() {
     sidebarClose.addEventListener('click', closeSidebar);
     sidebarOverlay.addEventListener('click', closeSidebar);
 
-    // Contact / Group / Endless clicks
+    // Contact / Group / Endless / Custom clicks
     contactsList.addEventListener('click', e => {
         const item = e.target.closest('.contact-item');
         if (item) selectChat(item.dataset.type, item.dataset.id);
@@ -853,6 +957,10 @@ function bindEvents() {
         if (item) selectChat(item.dataset.type, item.dataset.id);
     });
     endlessList.addEventListener('click', e => {
+        const item = e.target.closest('.contact-item');
+        if (item) selectChat(item.dataset.type, item.dataset.id);
+    });
+    customList.addEventListener('click', e => {
         const item = e.target.closest('.contact-item');
         if (item) selectChat(item.dataset.type, item.dataset.id);
     });
@@ -879,12 +987,14 @@ function bindEvents() {
         }
     });
 
-    // Clear
+    // Clear & Delete
     clearChatBtn.addEventListener('click', clearCurrentChat);
+    deleteChatBtn.addEventListener('click', deleteCurrentChat);
 
     // Modal
     newGroupBtn.addEventListener('click', () => openModal('group'));
     newEndlessBtn.addEventListener('click', () => openModal('endless'));
+    newCustomBtn.addEventListener('click', () => openModal('custom1on1'));
     modalClose.addEventListener('click', closeModal);
     modalCancelBtn.addEventListener('click', closeModal);
     modalCreateBtn.addEventListener('click', createFromModal);
