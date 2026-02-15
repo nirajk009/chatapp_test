@@ -4,8 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="description"
-        content="Opus AI Chat — Talk to GPT, Claude, Gemini, and more. Group chat with multiple AI models.">
+    <meta name="description" content="Opus AI Chat — Talk to 400+ AI models. Group chat, Endless mode.">
     <title>Opus AI Chat</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +15,7 @@
 
 <body>
     <div class="app">
-        <!-- ========== SIDEBAR / CONTACTS DRAWER ========== -->
+        <!-- ========== SIDEBAR ========== -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-brand">
@@ -40,7 +39,7 @@
                 </button>
             </div>
 
-            <!-- New Group Chat Button -->
+            <!-- Action Buttons -->
             <div class="sidebar-actions">
                 <button class="btn-new-group" id="newGroupBtn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -50,7 +49,20 @@
                         <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                     </svg>
-                    <span>New AI Group Chat</span>
+                    <span>AI Group Chat</span>
+                    <svg class="plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                </button>
+                <button class="btn-new-endless" id="newEndlessBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path
+                            d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.739-8-4.585 0-4.585 8 0 8 5.606 0 7.644-8 12.74-8z" />
+                    </svg>
+                    <span>Endless Chat</span>
                     <svg class="plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                         stroke-linecap="round" stroke-linejoin="round">
                         <line x1="12" y1="5" x2="12" y2="19" />
@@ -60,21 +72,17 @@
             </div>
 
             <div class="sidebar-section-label">AI Models</div>
-
-            <div class="contacts-list" id="contactsList">
-                <!-- Contacts rendered by JS -->
-            </div>
+            <div class="contacts-list" id="contactsList"></div>
 
             <div class="sidebar-section-label" id="groupLabel" style="display:none;">Group Chats</div>
-            <div class="groups-list" id="groupsList">
-                <!-- Groups rendered by JS -->
-            </div>
+            <div class="groups-list" id="groupsList"></div>
+
+            <div class="sidebar-section-label" id="endlessLabel" style="display:none;">Endless Chats</div>
+            <div class="endless-list" id="endlessList"></div>
 
             <div class="sidebar-footer">
                 <div class="user-profile">
-                    <div class="avatar avatar-self">
-                        <span>Y</span>
-                    </div>
+                    <div class="avatar avatar-self"><span>Y</span></div>
                     <div class="user-info">
                         <span class="user-name">You</span>
                         <span class="user-status-text">Online</span>
@@ -83,14 +91,14 @@
             </div>
         </aside>
 
-        <!-- ========== SIDEBAR OVERLAY (mobile) ========== -->
+        <!-- ========== OVERLAY ========== -->
         <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-        <!-- ========== GROUP CREATION MODAL ========== -->
+        <!-- ========== MODAL ========== -->
         <div class="modal-overlay" id="groupModal" style="display:none;">
             <div class="modal">
                 <div class="modal-header">
-                    <h3>Create AI Group Chat</h3>
+                    <h3 id="modalTitle">Create AI Group Chat</h3>
                     <button class="btn-icon modal-close" id="modalClose">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                             stroke-linecap="round" stroke-linejoin="round">
@@ -100,13 +108,23 @@
                     </button>
                 </div>
                 <div class="modal-body">
-                    <label class="modal-label" for="groupNameInput">Group Name</label>
+                    <label class="modal-label" for="groupNameInput" id="nameLabel">Group Name</label>
                     <input type="text" id="groupNameInput" class="modal-input" placeholder="e.g. AI Think Tank"
                         autocomplete="off">
 
-                    <label class="modal-label">Select AI Models</label>
+                    <label class="modal-label">Select AI Models <span class="selection-count" id="selectionCount">(0
+                            selected)</span></label>
+                    <div class="model-search-wrap">
+                        <svg class="model-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        </svg>
+                        <input type="text" id="modelSearchInput" class="model-search-input"
+                            placeholder="Search 400+ models…" autocomplete="off">
+                    </div>
                     <div class="model-select-grid" id="modelSelectGrid">
-                        <!-- Filled by JS -->
+                        <div class="model-loading" id="modelLoading">Loading models…</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -116,9 +134,8 @@
             </div>
         </div>
 
-        <!-- ========== MAIN CHAT AREA ========== -->
+        <!-- ========== MAIN CHAT ========== -->
         <main class="chat-area">
-            <!-- Chat Header -->
             <header class="chat-header" id="chatHeader">
                 <button class="btn-icon hamburger" id="hamburgerBtn" aria-label="Open contacts">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -128,7 +145,7 @@
                         <line x1="3" y1="18" x2="21" y2="18" />
                     </svg>
                 </button>
-                <div class="chat-header-info" id="chatHeaderInfo">
+                <div class="chat-header-info">
                     <div class="avatar avatar-header" id="headerAvatar">
                         <span id="headerAvatarLetter">G</span>
                     </div>
@@ -148,7 +165,7 @@
                 </div>
             </header>
 
-            <!-- Welcome Screen -->
+            <!-- Welcome -->
             <div class="welcome-screen" id="welcomeScreen" style="display:none;">
                 <div class="welcome-content">
                     <div class="welcome-icon">
@@ -161,33 +178,27 @@
                         </svg>
                     </div>
                     <h2>Welcome to Opus AI Chat</h2>
-                    <p>Select an AI model or create a group chat to begin</p>
+                    <p>Select an AI model, create a group, or start an endless chat</p>
                 </div>
             </div>
 
-            <!-- Messages Container -->
+            <!-- Messages -->
             <div class="messages-container" id="messagesContainer">
-                <div class="messages-list" id="messagesList">
-                    <!-- Messages rendered by JS -->
-                </div>
-
-                <!-- Typing Indicator -->
+                <div class="messages-list" id="messagesList"></div>
                 <div class="typing-indicator" id="typingIndicator" style="display:none;">
                     <div class="avatar avatar-small" id="typingAvatarWrap">
                         <span id="typingAvatar">G</span>
                     </div>
                     <div class="typing-bubble">
                         <span class="typing-name" id="typingName"></span>
-                        <div class="typing-dots">
-                            <span></span><span></span><span></span>
-                        </div>
+                        <div class="typing-dots"><span></span><span></span><span></span></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Message Input Bar -->
+            <!-- Input Bar -->
             <footer class="message-input-bar" id="messageInputBar">
-                <button class="btn-icon emoji-btn" id="emojiBtn" aria-label="Toggle emoji picker" title="Emoji">
+                <button class="btn-icon emoji-btn" id="emojiBtn" aria-label="Emoji" title="Emoji">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                         stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10" />
@@ -196,21 +207,24 @@
                         <line x1="15" y1="9" x2="15.01" y2="9" />
                     </svg>
                 </button>
-
-                <!-- Emoji Picker -->
                 <div class="emoji-picker" id="emojiPicker" style="display:none;">
                     <div class="emoji-grid" id="emojiGrid"></div>
                 </div>
-
-                <div class="input-wrapper">
+                <div class="input-wrapper" id="inputWrapper">
                     <textarea id="messageInput" placeholder="Type a message…" rows="1" autocomplete="off"></textarea>
                 </div>
-
-                <button class="btn-send" id="sendBtn" aria-label="Send message" title="Send" disabled>
+                <!-- Send Button (normal mode) -->
+                <button class="btn-send" id="sendBtn" aria-label="Send" title="Send" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                         stroke-linejoin="round">
                         <line x1="22" y1="2" x2="11" y2="13" />
                         <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                </button>
+                <!-- Stop Button (endless mode) -->
+                <button class="btn-stop" id="stopBtn" style="display:none;" aria-label="Stop" title="Stop endless chat">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="6" width="12" height="12" rx="2" />
                     </svg>
                 </button>
             </footer>

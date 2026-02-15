@@ -1,73 +1,17 @@
 /* ===================================================
-   OPUS AI CHAT — JavaScript (v2)
-   Puter.js AI Integration + Group Chat
+   OPUS AI CHAT v2 — JavaScript
+   Puter.js · Dynamic Model List · Group Chat · Endless Chat
    =================================================== */
 
-// ─────────────── AI MODEL CONTACTS ───────────────
-const AI_MODELS = [
-    {
-        id: 'gpt4o',
-        name: 'GPT-4o',
-        model: 'gpt-4o',
-        avatar: 'G',
-        avatarClass: 'avatar-gpt',
-        vendor: 'OpenAI',
-        description: 'Multimodal powerhouse',
-    },
-    {
-        id: 'claude',
-        name: 'Claude Sonnet',
-        model: 'claude-sonnet-4-20250514',
-        avatar: 'C',
-        avatarClass: 'avatar-claude',
-        vendor: 'Anthropic',
-        description: 'Thoughtful & safe',
-    },
-    {
-        id: 'gemini',
-        name: 'Gemini Flash',
-        model: 'gemini-2.5-flash-lite',
-        avatar: 'G',
-        avatarClass: 'avatar-gemini',
-        vendor: 'Google',
-        description: 'Fast & versatile',
-    },
-    {
-        id: 'llama',
-        name: 'LLaMA 4',
-        model: 'meta-llama/llama-4-scout',
-        avatar: 'L',
-        avatarClass: 'avatar-llama',
-        vendor: 'Meta',
-        description: 'Open-source giant',
-    },
-    {
-        id: 'deepseek',
-        name: 'DeepSeek R1',
-        model: 'deepseek-r1',
-        avatar: 'D',
-        avatarClass: 'avatar-deepseek',
-        vendor: 'DeepSeek',
-        description: 'Reasoning specialist',
-    },
-    {
-        id: 'mistral',
-        name: 'Mistral Large',
-        model: 'mistral-large-latest',
-        avatar: 'M',
-        avatarClass: 'avatar-mistral',
-        vendor: 'Mistral',
-        description: 'European excellence',
-    },
-    {
-        id: 'grok',
-        name: 'Grok',
-        model: 'grok-3-mini',
-        avatar: 'X',
-        avatarClass: 'avatar-grok',
-        vendor: 'xAI',
-        description: 'Witty & real-time',
-    },
+// ─────────────── FEATURED AI MODELS (sidebar contacts) ───────────────
+const FEATURED_MODELS = [
+    { id: 'gpt-4o', name: 'GPT-4o', avatar: 'G', avatarClass: 'avatar-gpt', vendor: 'OpenAI', desc: 'Multimodal powerhouse' },
+    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', avatar: 'C', avatarClass: 'avatar-claude', vendor: 'Anthropic', desc: 'Thoughtful & safe' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', avatar: 'G', avatarClass: 'avatar-gemini', vendor: 'Google', desc: 'Fast & versatile' },
+    { id: 'deepseek-chat', name: 'DeepSeek Chat', avatar: 'D', avatarClass: 'avatar-deepseek', vendor: 'DeepSeek', desc: 'Reasoning specialist' },
+    { id: 'grok-3-mini', name: 'Grok 3 Mini', avatar: 'X', avatarClass: 'avatar-grok', vendor: 'xAI', desc: 'Witty & real-time' },
+    { id: 'mistral-large-latest', name: 'Mistral Large', avatar: 'M', avatarClass: 'avatar-mistral', vendor: 'Mistral', desc: 'European excellence' },
+    { id: 'meta-llama/llama-4-scout', name: 'LLaMA 4 Scout', avatar: 'L', avatarClass: 'avatar-llama', vendor: 'Meta', desc: 'Open-source giant' },
 ];
 
 const EMOJIS = [
@@ -79,62 +23,139 @@ const EMOJIS = [
 ];
 
 // ─────────────── STATE ───────────────
-let activeChat = null;       // { type: '1on1'|'group', id: string }
-let chatHistories = {};      // id -> [{ from, text, time, senderName?, senderAvatar?, senderAvatarClass? }]
+let allModels = [];          // from puter.ai.listModels()
+let activeChat = null;       // { type: '1on1'|'group'|'endless', id }
+let chatHistories = {};
 let groups = [];             // [{ id, name, members: [modelId, ...] }]
+let endlessChats = [];       // [{ id, name, members: [modelId, modelId] }]
 let isAiResponding = false;
+let endlessRunning = false;
+let endlessAbortFlag = false;
+let selectedModelIds = new Set();
+let modalMode = 'group';     // 'group' or 'endless'
 
-// ─────────────── DOM REFS ───────────────
-const sidebar = document.getElementById('sidebar');
-const sidebarOverlay = document.getElementById('sidebarOverlay');
-const sidebarClose = document.getElementById('sidebarClose');
-const hamburgerBtn = document.getElementById('hamburgerBtn');
-const contactsList = document.getElementById('contactsList');
-const groupsList = document.getElementById('groupsList');
-const groupLabel = document.getElementById('groupLabel');
-const newGroupBtn = document.getElementById('newGroupBtn');
+// ─────────────── DOM ───────────────
+const $ = id => document.getElementById(id);
 
-const headerAvatar = document.getElementById('headerAvatar');
-const headerAvatarLetter = document.getElementById('headerAvatarLetter');
-const headerName = document.getElementById('headerName');
-const headerStatus = document.getElementById('headerStatus');
-const clearChatBtn = document.getElementById('clearChatBtn');
+const sidebar = $('sidebar');
+const sidebarOverlay = $('sidebarOverlay');
+const sidebarClose = $('sidebarClose');
+const hamburgerBtn = $('hamburgerBtn');
+const contactsList = $('contactsList');
+const groupsList = $('groupsList');
+const groupLabel = $('groupLabel');
+const endlessList = $('endlessList');
+const endlessLabel = $('endlessLabel');
+const newGroupBtn = $('newGroupBtn');
+const newEndlessBtn = $('newEndlessBtn');
 
-const welcomeScreen = document.getElementById('welcomeScreen');
-const messagesContainer = document.getElementById('messagesContainer');
-const messagesList = document.getElementById('messagesList');
-const messageInputBar = document.getElementById('messageInputBar');
-const messageInput = document.getElementById('messageInput');
-const sendBtn = document.getElementById('sendBtn');
-const emojiBtn = document.getElementById('emojiBtn');
-const emojiPicker = document.getElementById('emojiPicker');
-const emojiGrid = document.getElementById('emojiGrid');
-const typingIndicator = document.getElementById('typingIndicator');
-const typingAvatar = document.getElementById('typingAvatar');
-const typingAvatarWrap = document.getElementById('typingAvatarWrap');
-const typingName = document.getElementById('typingName');
+const headerAvatar = $('headerAvatar');
+const headerAvatarLetter = $('headerAvatarLetter');
+const headerName = $('headerName');
+const headerStatus = $('headerStatus');
+const clearChatBtn = $('clearChatBtn');
 
-// Modal
-const groupModal = document.getElementById('groupModal');
-const modalClose = document.getElementById('modalClose');
-const groupNameInput = document.getElementById('groupNameInput');
-const modelSelectGrid = document.getElementById('modelSelectGrid');
-const modalCancelBtn = document.getElementById('modalCancelBtn');
-const modalCreateBtn = document.getElementById('modalCreateBtn');
+const welcomeScreen = $('welcomeScreen');
+const messagesContainer = $('messagesContainer');
+const messagesList = $('messagesList');
+const messageInputBar = $('messageInputBar');
+const messageInput = $('messageInput');
+const sendBtn = $('sendBtn');
+const stopBtn = $('stopBtn');
+const emojiBtn = $('emojiBtn');
+const emojiPicker = $('emojiPicker');
+const emojiGrid = $('emojiGrid');
+const typingIndicator = $('typingIndicator');
+const typingAvatar = $('typingAvatar');
+const typingAvatarWrap = $('typingAvatarWrap');
+const typingName = $('typingName');
+
+const groupModal = $('groupModal');
+const modalTitle = $('modalTitle');
+const nameLabel = $('nameLabel');
+const modalClose = $('modalClose');
+const groupNameInput = $('groupNameInput');
+const modelSearchInput = $('modelSearchInput');
+const modelSelectGrid = $('modelSelectGrid');
+const modelLoading = $('modelLoading');
+const selectionCount = $('selectionCount');
+const modalCancelBtn = $('modalCancelBtn');
+const modalCreateBtn = $('modalCreateBtn');
 
 // ─────────────── INIT ───────────────
-function init() {
+async function init() {
     loadState();
     renderContacts();
     renderGroups();
+    renderEndlessChats();
     buildEmojiPicker();
-    buildModelSelectGrid();
     bindEvents();
 
-    // Auto-select first AI model
-    if (AI_MODELS.length > 0) {
-        selectChat('1on1', AI_MODELS[0].id);
+    if (FEATURED_MODELS.length > 0) {
+        selectChat('1on1', FEATURED_MODELS[0].id);
     }
+
+    // Load all models in background
+    loadAllModels();
+}
+
+// ─────────────── LOAD ALL MODELS ───────────────
+async function loadAllModels() {
+    try {
+        const models = await puter.ai.listModels();
+        allModels = models.map(m => ({
+            id: m.id,
+            puterId: m.puterId || '',
+            vendor: extractVendor(m.puterId || m.id),
+        }));
+        allModels.sort((a, b) => a.id.localeCompare(b.id));
+    } catch (e) {
+        console.warn('Failed to load models:', e);
+        // Fallback to featured models
+        allModels = FEATURED_MODELS.map(m => ({ id: m.id, puterId: '', vendor: m.vendor }));
+    }
+}
+
+function extractVendor(puterId) {
+    if (!puterId) return '';
+    // Format: "vendor:vendor/model" or just "model-name"
+    const parts = puterId.split(':');
+    if (parts.length >= 2) {
+        return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+    }
+    return '';
+}
+
+// ─────────────── RESPONSE TEXT EXTRACTION (BUG FIX) ───────────────
+function extractResponseText(response) {
+    // String response
+    if (typeof response === 'string') return response;
+
+    // ChatResponse with message.content
+    if (response && response.message) {
+        const content = response.message.content;
+        if (typeof content === 'string') return content;
+        if (Array.isArray(content)) {
+            return content.map(part => {
+                if (typeof part === 'string') return part;
+                if (part && typeof part.text === 'string') return part.text;
+                if (part && typeof part.content === 'string') return part.content;
+                return '';
+            }).join('');
+        }
+        if (content !== null && content !== undefined) return String(content);
+    }
+
+    // .text property
+    if (response && typeof response.text === 'string') return response.text;
+
+    // toString fallback
+    try {
+        const str = String(response);
+        if (str && str !== '[object Object]') return str;
+    } catch (e) { }
+
+    return 'Unable to parse response';
 }
 
 // ─────────────── PERSISTENCE ───────────────
@@ -145,19 +166,20 @@ function loadState() {
             const data = JSON.parse(saved);
             chatHistories = data.chatHistories || {};
             groups = data.groups || [];
+            endlessChats = data.endlessChats || [];
         }
-    } catch (e) { /* ignore */ }
+    } catch (e) { }
 }
 
 function saveState() {
     try {
-        localStorage.setItem('opus_ai_chat_v2', JSON.stringify({ chatHistories, groups }));
-    } catch (e) { /* ignore */ }
+        localStorage.setItem('opus_ai_chat_v2', JSON.stringify({ chatHistories, groups, endlessChats }));
+    } catch (e) { }
 }
 
-// ─────────────── RENDER CONTACTS ───────────────
+// ─────────────── RENDER SIDEBAR ───────────────
 function renderContacts() {
-    contactsList.innerHTML = AI_MODELS.map((m, i) => {
+    contactsList.innerHTML = FEATURED_MODELS.map((m, i) => {
         const msgs = chatHistories[m.id] || [];
         const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
         const isActive = activeChat && activeChat.type === '1on1' && activeChat.id === m.id;
@@ -165,7 +187,7 @@ function renderContacts() {
         return `
             <div class="contact-item${isActive ? ' active' : ''}"
                  data-type="1on1" data-id="${m.id}"
-                 style="animation-delay: ${i * 0.04}s">
+                 style="animation-delay:${i * 0.04}s">
                 <div class="avatar ${m.avatarClass}">
                     <span>${m.avatar}</span>
                     <div class="online-dot"></div>
@@ -176,96 +198,155 @@ function renderContacts() {
                         <span class="contact-time">${lastMsg ? lastMsg.time : ''}</span>
                     </div>
                     <div class="contact-bottom-row">
-                        <span class="contact-last-msg">${lastMsg ? truncate(lastMsg.text, 30) : m.description}</span>
+                        <span class="contact-last-msg">${lastMsg ? truncate(lastMsg.text, 28) : m.desc}</span>
                         <span class="model-badge">${m.vendor}</span>
                     </div>
                 </div>
-            </div>
-        `;
+            </div>`;
     }).join('');
 }
 
 function renderGroups() {
-    if (groups.length === 0) {
-        groupLabel.style.display = 'none';
-        groupsList.innerHTML = '';
-        return;
-    }
-
+    if (groups.length === 0) { groupLabel.style.display = 'none'; groupsList.innerHTML = ''; return; }
     groupLabel.style.display = '';
     groupsList.innerHTML = groups.map((g, i) => {
         const msgs = chatHistories[g.id] || [];
         const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
         const isActive = activeChat && activeChat.type === 'group' && activeChat.id === g.id;
-        const memberCount = g.members.length;
-
         return `
             <div class="contact-item${isActive ? ' active' : ''}"
                  data-type="group" data-id="${g.id}"
-                 style="animation-delay: ${i * 0.04}s">
-                <div class="avatar avatar-group">
-                    <span>👥</span>
-                </div>
+                 style="animation-delay:${i * 0.04}s">
+                <div class="avatar avatar-group"><span>👥</span></div>
                 <div class="contact-details">
                     <div class="contact-top-row">
                         <span class="contact-name">${g.name}</span>
                         <span class="contact-time">${lastMsg ? lastMsg.time : ''}</span>
                     </div>
                     <div class="contact-bottom-row">
-                        <span class="contact-last-msg">${lastMsg ? truncate(lastMsg.text, 25) : `${memberCount} AI models`}</span>
+                        <span class="contact-last-msg">${lastMsg ? truncate(lastMsg.text, 25) : g.members.length + ' AI models'}</span>
                         <span class="model-badge">Group</span>
                     </div>
                 </div>
-            </div>
-        `;
+            </div>`;
     }).join('');
 }
 
-function truncate(str, len) {
-    return str.length > len ? str.substring(0, len) + '…' : str;
+function renderEndlessChats() {
+    if (endlessChats.length === 0) { endlessLabel.style.display = 'none'; endlessList.innerHTML = ''; return; }
+    endlessLabel.style.display = '';
+    endlessList.innerHTML = endlessChats.map((e, i) => {
+        const msgs = chatHistories[e.id] || [];
+        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        const isActive = activeChat && activeChat.type === 'endless' && activeChat.id === e.id;
+        return `
+            <div class="contact-item${isActive ? ' active' : ''}"
+                 data-type="endless" data-id="${e.id}"
+                 style="animation-delay:${i * 0.04}s">
+                <div class="avatar avatar-endless"><span>∞</span></div>
+                <div class="contact-details">
+                    <div class="contact-top-row">
+                        <span class="contact-name">${e.name}</span>
+                        <span class="contact-time">${lastMsg ? lastMsg.time : ''}</span>
+                    </div>
+                    <div class="contact-bottom-row">
+                        <span class="contact-last-msg">${lastMsg ? truncate(lastMsg.text, 25) : 'Endless debate'}</span>
+                        <span class="model-badge badge-endless">∞ Endless</span>
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+function truncate(str, len) { return str.length > len ? str.substring(0, len) + '…' : str; }
+
+// ─────────────── GET MODEL INFO ───────────────
+function getModelInfo(modelId) {
+    const featured = FEATURED_MODELS.find(m => m.id === modelId);
+    if (featured) return featured;
+    // Dynamic model — generate info
+    const initial = modelId.charAt(0).toUpperCase();
+    return {
+        id: modelId,
+        name: modelId,
+        avatar: initial,
+        avatarClass: 'avatar-default',
+        vendor: extractVendor(modelId),
+        desc: modelId,
+    };
 }
 
 // ─────────────── SELECT CHAT ───────────────
 function selectChat(type, id) {
+    // If switching away from an endless chat that's running, stop it
+    if (endlessRunning && !(type === 'endless' && activeChat && activeChat.id === id)) {
+        endlessAbortFlag = true;
+    }
+
     activeChat = { type, id };
 
     if (type === '1on1') {
-        const model = AI_MODELS.find(m => m.id === id);
-        if (!model) return;
-        headerAvatarLetter.textContent = model.avatar;
-        headerAvatar.className = `avatar avatar-header ${model.avatarClass}`;
-        headerName.textContent = model.name;
-        headerStatus.textContent = `${model.vendor} · Ready`;
-    } else {
+        const m = getModelInfo(id);
+        headerAvatarLetter.textContent = m.avatar;
+        headerAvatar.className = `avatar avatar-header ${m.avatarClass}`;
+        headerName.textContent = m.name;
+        headerStatus.textContent = `${m.vendor} · Ready`;
+    } else if (type === 'group') {
         const group = groups.find(g => g.id === id);
         if (!group) return;
         headerAvatarLetter.textContent = '👥';
         headerAvatar.className = 'avatar avatar-header avatar-group';
         headerName.textContent = group.name;
-        const names = group.members.map(mid => {
-            const m = AI_MODELS.find(a => a.id === mid);
-            return m ? m.name : mid;
-        });
-        headerStatus.textContent = names.join(', ');
+        headerStatus.textContent = group.members.map(mid => getModelInfo(mid).name).join(', ');
+    } else if (type === 'endless') {
+        const ec = endlessChats.find(e => e.id === id);
+        if (!ec) return;
+        headerAvatarLetter.textContent = '∞';
+        headerAvatar.className = 'avatar avatar-header avatar-endless';
+        headerName.textContent = ec.name;
+        headerStatus.textContent = ec.members.map(mid => getModelInfo(mid).name).join(' vs ');
     }
 
     welcomeScreen.style.display = 'none';
     messagesContainer.style.display = '';
     messageInputBar.style.display = '';
 
+    // Update input bar state
+    if (type === 'endless' && endlessRunning && activeChat.id === id) {
+        showStopMode();
+    } else {
+        showNormalMode();
+    }
+
     renderMessages();
     renderContacts();
     renderGroups();
+    renderEndlessChats();
     closeSidebar();
-
     setTimeout(() => messageInput.focus(), 350);
+}
+
+// ─────────────── INPUT BAR MODES ───────────────
+function showStopMode() {
+    sendBtn.style.display = 'none';
+    stopBtn.style.display = 'flex';
+    messageInput.placeholder = 'AIs are chatting… click stop to intervene';
+    messageInput.disabled = true;
+}
+
+function showNormalMode() {
+    stopBtn.style.display = 'none';
+    sendBtn.style.display = 'flex';
+    messageInput.placeholder = 'Type a message…';
+    messageInput.disabled = false;
+    updateSendButton();
 }
 
 // ─────────────── RENDER MESSAGES ───────────────
 function renderMessages() {
     if (!activeChat) return;
     const msgs = chatHistories[activeChat.id] || [];
-    const isGroup = activeChat.type === 'group';
+    const isGroupLike = activeChat.type === 'group' || activeChat.type === 'endless';
 
     let html = '<div class="date-separator"><span>Today</span></div>';
 
@@ -275,12 +356,11 @@ function renderMessages() {
         let senderHtml = '';
 
         if (!isSent) {
-            const cls = msg.senderAvatarClass || 'avatar-gpt';
-            const letter = msg.senderAvatar || 'A';
+            const cls = msg.senderAvatarClass || 'avatar-default';
+            const letter = msg.senderAvatar || '?';
             avatarHtml = `<div class="avatar avatar-small ${cls}"><span>${letter}</span></div>`;
-
-            if (isGroup && msg.senderName) {
-                senderHtml = `<span class="msg-sender-name" style="color: var(--primary)">${msg.senderName}</span>`;
+            if (isGroupLike && msg.senderName) {
+                senderHtml = `<span class="msg-sender-name" style="color:var(--primary)">${escapeHtml(msg.senderName)}</span>`;
             }
         }
 
@@ -289,14 +369,13 @@ function renderMessages() {
                 ${avatarHtml}
                 <div class="message-bubble">
                     ${senderHtml}
-                    <div class="message-text">${escapeHtml(msg.text)}</div>
+                    <div class="message-text">${escapeHtml(String(msg.text || ''))}</div>
                     <div class="message-time">
                         ${msg.time}
                         ${isSent ? '<span class="message-check">✓✓</span>' : ''}
                     </div>
                 </div>
-            </div>
-        `;
+            </div>`;
     });
 
     messagesList.innerHTML = html;
@@ -304,12 +383,11 @@ function renderMessages() {
 }
 
 function scrollToBottom() {
-    requestAnimationFrame(() => {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    });
+    requestAnimationFrame(() => { messagesContainer.scrollTop = messagesContainer.scrollHeight; });
 }
 
 function escapeHtml(text) {
+    if (typeof text !== 'string') text = String(text || '');
     const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
     return text.replace(/[&<>"']/g, m => map[m]);
 }
@@ -322,50 +400,21 @@ function formatTime(date) {
     return `${h}:${m} ${ampm}`;
 }
 
-// ─────────────── SEND MESSAGE ───────────────
-async function sendMessage() {
-    const text = messageInput.value.trim();
-    if (!text || !activeChat || isAiResponding) return;
-
-    const now = new Date();
-    const time = formatTime(now);
-
-    if (!chatHistories[activeChat.id]) chatHistories[activeChat.id] = [];
-    chatHistories[activeChat.id].push({ from: 'me', text, time });
-    saveState();
-
-    appendMessage('me', text, time);
-    messageInput.value = '';
-    autoResizeInput();
-    updateSendButton();
-    renderContacts();
-    renderGroups();
-
-    // Trigger AI response
-    if (activeChat.type === '1on1') {
-        await triggerAiReply(activeChat.id);
-    } else {
-        await triggerGroupReply(activeChat.id);
-    }
-}
-
 function appendMessage(from, text, time, senderName, senderAvatar, senderAvatarClass) {
     const isSent = from === 'me';
-    const isGroup = activeChat && activeChat.type === 'group';
+    const isGroupLike = activeChat && (activeChat.type === 'group' || activeChat.type === 'endless');
 
     const row = document.createElement('div');
     row.className = `message-row ${isSent ? 'sent' : 'received'}`;
 
     let avatarHtml = '';
     let senderHtml = '';
-
     if (!isSent) {
-        const cls = senderAvatarClass || 'avatar-gpt';
-        const letter = senderAvatar || 'A';
+        const cls = senderAvatarClass || 'avatar-default';
+        const letter = senderAvatar || '?';
         avatarHtml = `<div class="avatar avatar-small ${cls}"><span>${letter}</span></div>`;
-
-        if (isGroup && senderName) {
-            senderHtml = `<span class="msg-sender-name" style="color: var(--primary)">${senderName}</span>`;
+        if (isGroupLike && senderName) {
+            senderHtml = `<span class="msg-sender-name" style="color:var(--primary)">${escapeHtml(senderName)}</span>`;
         }
     }
 
@@ -373,54 +422,68 @@ function appendMessage(from, text, time, senderName, senderAvatar, senderAvatarC
         ${avatarHtml}
         <div class="message-bubble">
             ${senderHtml}
-            <div class="message-text">${escapeHtml(text)}</div>
+            <div class="message-text">${escapeHtml(String(text || ''))}</div>
             <div class="message-time">
                 ${time}
                 ${isSent ? '<span class="message-check">✓✓</span>' : ''}
             </div>
-        </div>
-    `;
+        </div>`;
 
     messagesList.appendChild(row);
     scrollToBottom();
 }
 
+// ─────────────── SEND MESSAGE ───────────────
+async function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text || !activeChat || isAiResponding) return;
+
+    const time = formatTime(new Date());
+    if (!chatHistories[activeChat.id]) chatHistories[activeChat.id] = [];
+    chatHistories[activeChat.id].push({ from: 'me', text, time });
+    saveState();
+    appendMessage('me', text, time);
+    messageInput.value = '';
+    autoResizeInput();
+    updateSendButton();
+    renderContacts(); renderGroups(); renderEndlessChats();
+
+    if (activeChat.type === '1on1') {
+        await triggerAiReply(activeChat.id);
+    } else if (activeChat.type === 'group') {
+        await triggerGroupReply(activeChat.id);
+    } else if (activeChat.type === 'endless') {
+        startEndless(activeChat.id);
+    }
+}
+
 // ─────────────── 1:1 AI REPLY ───────────────
 async function triggerAiReply(modelId) {
-    const model = AI_MODELS.find(m => m.id === modelId);
-    if (!model) return;
-
+    const model = getModelInfo(modelId);
     isAiResponding = true;
+    updateSendButton();
     showTypingIndicator(model);
 
     try {
-        // Build message history for context
         const history = (chatHistories[modelId] || []).slice(-20);
         const messages = [
-            { role: 'system', content: `You are ${model.name} by ${model.vendor}. Keep responses concise (2-3 sentences max). Be helpful, friendly, and conversational.` },
+            { role: 'system', content: `You are ${model.name}. Keep responses concise (2-3 sentences). Be helpful, friendly, conversational.` },
             ...history.map(msg => ({
                 role: msg.from === 'me' ? 'user' : 'assistant',
-                content: msg.text
+                content: String(msg.text || '')
             }))
         ];
 
-        const response = await puter.ai.chat(messages, { model: model.model });
-
+        const response = await puter.ai.chat(messages, { model: model.id });
         hideTypingIndicator();
 
-        const replyText = typeof response === 'string'
-            ? response
-            : (response?.message?.content || response?.text || String(response));
-
+        const replyText = extractResponseText(response);
         const time = formatTime(new Date());
 
+        if (!chatHistories[modelId]) chatHistories[modelId] = [];
         chatHistories[modelId].push({
-            from: 'ai',
-            text: replyText,
-            time,
-            senderName: model.name,
-            senderAvatar: model.avatar,
-            senderAvatarClass: model.avatarClass,
+            from: 'ai', text: replyText, time,
+            senderName: model.name, senderAvatar: model.avatar, senderAvatarClass: model.avatarClass,
         });
         saveState();
 
@@ -428,82 +491,40 @@ async function triggerAiReply(modelId) {
             appendMessage('ai', replyText, time, model.name, model.avatar, model.avatarClass);
         }
         renderContacts();
-
     } catch (err) {
         hideTypingIndicator();
-        const time = formatTime(new Date());
-        const errorText = `⚠️ Error: ${err.message || 'Failed to get response. Please try again.'}`;
-
-        chatHistories[modelId].push({
-            from: 'ai', text: errorText, time,
-            senderName: model.name, senderAvatar: model.avatar, senderAvatarClass: model.avatarClass,
-        });
-        saveState();
-
-        if (activeChat && activeChat.id === modelId) {
-            appendMessage('ai', errorText, time, model.name, model.avatar, model.avatarClass);
-        }
+        handleAiError(modelId, model, err);
     }
 
     isAiResponding = false;
+    updateSendButton();
 }
 
-// ─────────────── GROUP CHAT REPLY ───────────────
+// ─────────────── GROUP REPLY ───────────────
 async function triggerGroupReply(groupId) {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
-
     isAiResponding = true;
+    updateSendButton();
 
-    // Each AI model in the group responds one by one
     for (const memberId of group.members) {
-        const model = AI_MODELS.find(m => m.id === memberId);
-        if (!model) continue;
-
+        const model = getModelInfo(memberId);
         showTypingIndicator(model);
-
-        // Small delay between different AI responses to feel natural
         await sleep(500);
 
         try {
-            // Build context: include ALL group messages so each AI sees what others said
             const history = (chatHistories[groupId] || []).slice(-30);
-            const messages = [
-                {
-                    role: 'system',
-                    content: `You are ${model.name} by ${model.vendor} in a group chat with the user and other AI models: ${group.members.map(mid => {
-                        const mm = AI_MODELS.find(a => a.id === mid);
-                        return mm ? mm.name : mid;
-                    }).join(', ')}. You can see everyone's messages and can respond to other AIs or the user. Keep responses concise (2-3 sentences). Be conversational and engage with what others have said.`
-                },
-                ...history.map(msg => {
-                    if (msg.from === 'me') {
-                        return { role: 'user', content: msg.text };
-                    } else {
-                        // Other AI messages shown as assistant context
-                        return { role: msg.senderName === model.name ? 'assistant' : 'user', content: `[${msg.senderName}]: ${msg.text}` };
-                    }
-                })
-            ];
-
-            const response = await puter.ai.chat(messages, { model: model.model });
-
+            const messages = buildGroupMessages(history, model, group.members);
+            const response = await puter.ai.chat(messages, { model: model.id });
             hideTypingIndicator();
 
-            const replyText = typeof response === 'string'
-                ? response
-                : (response?.message?.content || response?.text || String(response));
-
+            const replyText = extractResponseText(response);
             const time = formatTime(new Date());
 
             if (!chatHistories[groupId]) chatHistories[groupId] = [];
             chatHistories[groupId].push({
-                from: 'ai',
-                text: replyText,
-                time,
-                senderName: model.name,
-                senderAvatar: model.avatar,
-                senderAvatarClass: model.avatarClass,
+                from: 'ai', text: replyText, time,
+                senderName: model.name, senderAvatar: model.avatar, senderAvatarClass: model.avatarClass,
             });
             saveState();
 
@@ -511,30 +532,127 @@ async function triggerGroupReply(groupId) {
                 appendMessage('ai', replyText, time, model.name, model.avatar, model.avatarClass);
             }
             renderGroups();
-
         } catch (err) {
             hideTypingIndicator();
-            const time = formatTime(new Date());
-            const errorText = `⚠️ ${model.name} error: ${err.message || 'Failed to respond'}`;
-
-            if (!chatHistories[groupId]) chatHistories[groupId] = [];
-            chatHistories[groupId].push({
-                from: 'ai', text: errorText, time,
-                senderName: model.name, senderAvatar: model.avatar, senderAvatarClass: model.avatarClass,
-            });
-            saveState();
-
-            if (activeChat && activeChat.type === 'group' && activeChat.id === groupId) {
-                appendMessage('ai', errorText, time, model.name, model.avatar, model.avatarClass);
-            }
+            handleAiError(groupId, model, err);
         }
     }
 
     isAiResponding = false;
+    updateSendButton();
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+function buildGroupMessages(history, currentModel, memberIds) {
+    const allNames = memberIds.map(mid => getModelInfo(mid).name).join(', ');
+    return [
+        {
+            role: 'system',
+            content: `You are ${currentModel.name} in a group chat with the user and other AI models: ${allNames}. You can see everyone's messages. Engage with what others said. Keep responses concise (2-3 sentences).`
+        },
+        ...history.map(msg => {
+            if (msg.from === 'me') return { role: 'user', content: String(msg.text || '') };
+            const isMe = msg.senderName === currentModel.name;
+            return { role: isMe ? 'assistant' : 'user', content: `[${msg.senderName}]: ${String(msg.text || '')}` };
+        })
+    ];
+}
+
+// ─────────────── ENDLESS CHAT ───────────────
+async function startEndless(chatId) {
+    const ec = endlessChats.find(e => e.id === chatId);
+    if (!ec || ec.members.length < 2) return;
+
+    endlessRunning = true;
+    endlessAbortFlag = false;
+    isAiResponding = true;
+    showStopMode();
+    updateSendButton();
+
+    const model1 = getModelInfo(ec.members[0]);
+    const model2 = getModelInfo(ec.members[1]);
+    let current = model1;
+    let next = model2;
+
+    while (!endlessAbortFlag) {
+        showTypingIndicator(current);
+        await sleep(800);
+
+        if (endlessAbortFlag) break;
+
+        try {
+            const history = (chatHistories[chatId] || []).slice(-30);
+            const messages = [
+                {
+                    role: 'system',
+                    content: `You are ${current.name} having an open-ended conversation with ${next.name}. The user started this conversation and you both should keep it going naturally. Respond to what was last said. Be engaging. Keep each response to 2-4 sentences. Don't repeat yourself. Explore new angles of the topic.`
+                },
+                ...history.map(msg => {
+                    if (msg.from === 'me') return { role: 'user', content: String(msg.text || '') };
+                    const isMe = msg.senderName === current.name;
+                    return { role: isMe ? 'assistant' : 'user', content: `[${msg.senderName}]: ${String(msg.text || '')}` };
+                })
+            ];
+
+            const response = await puter.ai.chat(messages, { model: current.id });
+            hideTypingIndicator();
+
+            if (endlessAbortFlag) break;
+
+            const replyText = extractResponseText(response);
+            const time = formatTime(new Date());
+
+            if (!chatHistories[chatId]) chatHistories[chatId] = [];
+            chatHistories[chatId].push({
+                from: 'ai', text: replyText, time,
+                senderName: current.name, senderAvatar: current.avatar, senderAvatarClass: current.avatarClass,
+            });
+            saveState();
+
+            if (activeChat && activeChat.type === 'endless' && activeChat.id === chatId) {
+                appendMessage('ai', replyText, time, current.name, current.avatar, current.avatarClass);
+            }
+            renderEndlessChats();
+
+        } catch (err) {
+            hideTypingIndicator();
+            handleAiError(chatId, current, err);
+            await sleep(2000);  // Wait before retrying after error
+        }
+
+        // Swap
+        [current, next] = [next, current];
+
+        // Small pause between turns
+        await sleep(1500);
+    }
+
+    endlessRunning = false;
+    isAiResponding = false;
+    hideTypingIndicator();
+
+    if (activeChat && activeChat.type === 'endless' && activeChat.id === chatId) {
+        showNormalMode();
+    }
+    updateSendButton();
+}
+
+function stopEndless() {
+    endlessAbortFlag = true;
+}
+
+// ─────────────── ERROR HANDLER ───────────────
+function handleAiError(chatId, model, err) {
+    const time = formatTime(new Date());
+    const errorText = `⚠️ ${model.name} error: ${err.message || 'Failed to respond'}`;
+    if (!chatHistories[chatId]) chatHistories[chatId] = [];
+    chatHistories[chatId].push({
+        from: 'ai', text: errorText, time,
+        senderName: model.name, senderAvatar: model.avatar, senderAvatarClass: model.avatarClass,
+    });
+    saveState();
+    if (activeChat && activeChat.id === chatId) {
+        appendMessage('ai', errorText, time, model.name, model.avatar, model.avatarClass);
+    }
 }
 
 // ─────────────── TYPING INDICATOR ───────────────
@@ -550,87 +668,151 @@ function hideTypingIndicator() {
     typingIndicator.style.display = 'none';
 }
 
-// ─────────────── GROUP MODAL ───────────────
-let selectedModelIds = new Set();
-
-function buildModelSelectGrid() {
-    modelSelectGrid.innerHTML = AI_MODELS.map(m => `
-        <div class="model-select-item" data-id="${m.id}">
-            <div class="avatar ${m.avatarClass}">
-                <span>${m.avatar}</span>
-            </div>
-            <span class="model-select-name">${m.name}</span>
-            <div class="model-select-check">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-        </div>
-    `).join('');
-}
-
-function openGroupModal() {
+// ─────────────── MODAL ───────────────
+function openModal(mode) {
+    modalMode = mode;
     selectedModelIds.clear();
+
+    if (mode === 'group') {
+        modalTitle.textContent = 'Create AI Group Chat';
+        nameLabel.textContent = 'Group Name';
+        groupNameInput.placeholder = 'e.g. AI Think Tank';
+        modalCreateBtn.textContent = 'Create Group';
+    } else {
+        modalTitle.textContent = 'Create Endless Chat';
+        nameLabel.textContent = 'Chat Name';
+        groupNameInput.placeholder = 'e.g. GPT vs Claude';
+        modalCreateBtn.textContent = 'Create Endless Chat';
+    }
+
     groupNameInput.value = '';
-    updateModelSelection();
+    modelSearchInput.value = '';
+    renderModelList('');
+    updateSelectionCount();
     groupModal.style.display = 'flex';
 }
 
-function closeGroupModal() {
-    groupModal.style.display = 'none';
-}
+function closeModal() { groupModal.style.display = 'none'; }
 
-function toggleModelSelection(modelId) {
-    if (selectedModelIds.has(modelId)) {
-        selectedModelIds.delete(modelId);
-    } else {
-        selectedModelIds.add(modelId);
-    }
-    updateModelSelection();
-}
+function renderModelList(filter) {
+    const lowerFilter = filter.toLowerCase();
+    const filtered = allModels.length > 0
+        ? allModels.filter(m => m.id.toLowerCase().includes(lowerFilter) || m.vendor.toLowerCase().includes(lowerFilter))
+        : FEATURED_MODELS.map(m => ({ id: m.id, vendor: m.vendor }));
 
-function updateModelSelection() {
-    modelSelectGrid.querySelectorAll('.model-select-item').forEach(el => {
-        const id = el.dataset.id;
-        el.classList.toggle('selected', selectedModelIds.has(id));
-    });
-}
-
-function createGroup() {
-    const name = groupNameInput.value.trim() || 'AI Group Chat';
-    if (selectedModelIds.size < 2) {
-        groupNameInput.placeholder = 'Select at least 2 models!';
-        groupNameInput.classList.add('error');
-        setTimeout(() => groupNameInput.classList.remove('error'), 1500);
+    if (filtered.length === 0) {
+        modelSelectGrid.innerHTML = '<div class="model-loading">No models found</div>';
         return;
     }
 
-    const group = {
-        id: 'group_' + Date.now(),
-        name,
-        members: [...selectedModelIds],
-    };
+    // Limit display to 100 for performance
+    const toShow = filtered.slice(0, 100);
 
-    groups.push(group);
-    saveState();
-    closeGroupModal();
-    renderGroups();
-    selectChat('group', group.id);
+    modelSelectGrid.innerHTML = toShow.map(m => {
+        const isSelected = selectedModelIds.has(m.id);
+        return `
+            <div class="model-select-item${isSelected ? ' selected' : ''}" data-id="${m.id}">
+                <span class="model-select-id">${m.id}</span>
+                ${m.vendor ? `<span class="model-select-vendor">${m.vendor}</span>` : ''}
+                <div class="model-select-check">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+            </div>`;
+    }).join('');
+
+    if (filtered.length > 100) {
+        modelSelectGrid.innerHTML += `<div class="model-loading">Showing first 100 of ${filtered.length} results. Narrow your search.</div>`;
+    }
+}
+
+function toggleModelSelection(modelId) {
+    if (modalMode === 'endless') {
+        // Limit to 2 for endless
+        if (selectedModelIds.has(modelId)) {
+            selectedModelIds.delete(modelId);
+        } else {
+            if (selectedModelIds.size >= 2) {
+                // Remove oldest selection
+                const first = selectedModelIds.values().next().value;
+                selectedModelIds.delete(first);
+            }
+            selectedModelIds.add(modelId);
+        }
+    } else {
+        if (selectedModelIds.has(modelId)) {
+            selectedModelIds.delete(modelId);
+        } else {
+            selectedModelIds.add(modelId);
+        }
+    }
+    updateSelectionCount();
+    // Update visual
+    modelSelectGrid.querySelectorAll('.model-select-item').forEach(el => {
+        el.classList.toggle('selected', selectedModelIds.has(el.dataset.id));
+    });
+}
+
+function updateSelectionCount() {
+    const count = selectedModelIds.size;
+    if (modalMode === 'endless') {
+        selectionCount.textContent = `(${count}/2 selected)`;
+    } else {
+        selectionCount.textContent = `(${count} selected)`;
+    }
+}
+
+function createFromModal() {
+    const name = groupNameInput.value.trim();
+
+    if (modalMode === 'endless') {
+        if (selectedModelIds.size !== 2) {
+            groupNameInput.value = '';
+            groupNameInput.placeholder = '⚠️ Select exactly 2 models!';
+            return;
+        }
+        const members = [...selectedModelIds];
+        const ec = {
+            id: 'endless_' + Date.now(),
+            name: name || `${getModelInfo(members[0]).name} vs ${getModelInfo(members[1]).name}`,
+            members,
+        };
+        endlessChats.push(ec);
+        saveState();
+        closeModal();
+        renderEndlessChats();
+        selectChat('endless', ec.id);
+    } else {
+        if (selectedModelIds.size < 2) {
+            groupNameInput.value = '';
+            groupNameInput.placeholder = '⚠️ Select at least 2 models!';
+            return;
+        }
+        const group = {
+            id: 'group_' + Date.now(),
+            name: name || 'AI Group Chat',
+            members: [...selectedModelIds],
+        };
+        groups.push(group);
+        saveState();
+        closeModal();
+        renderGroups();
+        selectChat('group', group.id);
+    }
 }
 
 // ─────────────── CLEAR CHAT ───────────────
 function clearCurrentChat() {
     if (!activeChat) return;
+    if (endlessRunning && activeChat.type === 'endless') stopEndless();
     chatHistories[activeChat.id] = [];
     saveState();
     renderMessages();
-    renderContacts();
-    renderGroups();
+    renderContacts(); renderGroups(); renderEndlessChats();
 }
 
 // ─────────────── EMOJI ───────────────
 function buildEmojiPicker() {
-    emojiGrid.innerHTML = EMOJIS.map(e =>
-        `<div class="emoji-item" data-emoji="${e}">${e}</div>`
-    ).join('');
+    emojiGrid.innerHTML = EMOJIS.map(e => `<div class="emoji-item" data-emoji="${e}">${e}</div>`).join('');
 }
 
 function toggleEmojiPicker() {
@@ -639,23 +821,9 @@ function toggleEmojiPicker() {
     emojiBtn.classList.toggle('active', !isOpen);
 }
 
-function insertEmoji(emoji) {
-    messageInput.value += emoji;
-    messageInput.focus();
-    autoResizeInput();
-    updateSendButton();
-}
-
 // ─────────────── SIDEBAR ───────────────
-function openSidebar() {
-    sidebar.classList.add('open');
-    sidebarOverlay.classList.add('active');
-}
-
-function closeSidebar() {
-    sidebar.classList.remove('open');
-    sidebarOverlay.classList.remove('active');
-}
+function openSidebar() { sidebar.classList.add('open'); sidebarOverlay.classList.add('active'); }
+function closeSidebar() { sidebar.classList.remove('open'); sidebarOverlay.classList.remove('active'); }
 
 // ─────────────── INPUT ───────────────
 function autoResizeInput() {
@@ -667,73 +835,73 @@ function updateSendButton() {
     sendBtn.disabled = messageInput.value.trim().length === 0 || isAiResponding;
 }
 
-// ─────────────── EVENT BINDINGS ───────────────
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─────────────── EVENTS ───────────────
 function bindEvents() {
     hamburgerBtn.addEventListener('click', openSidebar);
     sidebarClose.addEventListener('click', closeSidebar);
     sidebarOverlay.addEventListener('click', closeSidebar);
 
-    // Contact & Group selection
-    contactsList.addEventListener('click', (e) => {
+    // Contact / Group / Endless clicks
+    contactsList.addEventListener('click', e => {
+        const item = e.target.closest('.contact-item');
+        if (item) selectChat(item.dataset.type, item.dataset.id);
+    });
+    groupsList.addEventListener('click', e => {
+        const item = e.target.closest('.contact-item');
+        if (item) selectChat(item.dataset.type, item.dataset.id);
+    });
+    endlessList.addEventListener('click', e => {
         const item = e.target.closest('.contact-item');
         if (item) selectChat(item.dataset.type, item.dataset.id);
     });
 
-    groupsList.addEventListener('click', (e) => {
-        const item = e.target.closest('.contact-item');
-        if (item) selectChat(item.dataset.type, item.dataset.id);
-    });
-
-    // Send
+    // Send & Stop
     sendBtn.addEventListener('click', sendMessage);
-    messageInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
+    stopBtn.addEventListener('click', stopEndless);
+
+    messageInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
-    messageInput.addEventListener('input', () => {
-        autoResizeInput();
-        updateSendButton();
-    });
+    messageInput.addEventListener('input', () => { autoResizeInput(); updateSendButton(); });
 
     // Emoji
-    emojiBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleEmojiPicker(); });
-    emojiGrid.addEventListener('click', (e) => {
+    emojiBtn.addEventListener('click', e => { e.stopPropagation(); toggleEmojiPicker(); });
+    emojiGrid.addEventListener('click', e => {
         const item = e.target.closest('.emoji-item');
-        if (item) insertEmoji(item.dataset.emoji);
+        if (item) { messageInput.value += item.dataset.emoji; messageInput.focus(); autoResizeInput(); updateSendButton(); }
     });
-    document.addEventListener('click', (e) => {
+    document.addEventListener('click', e => {
         if (!emojiPicker.contains(e.target) && e.target !== emojiBtn && !emojiBtn.contains(e.target)) {
             emojiPicker.style.display = 'none';
             emojiBtn.classList.remove('active');
         }
     });
 
-    // Clear chat
+    // Clear
     clearChatBtn.addEventListener('click', clearCurrentChat);
 
-    // Group modal
-    newGroupBtn.addEventListener('click', openGroupModal);
-    modalClose.addEventListener('click', closeGroupModal);
-    modalCancelBtn.addEventListener('click', closeGroupModal);
-    modalCreateBtn.addEventListener('click', createGroup);
+    // Modal
+    newGroupBtn.addEventListener('click', () => openModal('group'));
+    newEndlessBtn.addEventListener('click', () => openModal('endless'));
+    modalClose.addEventListener('click', closeModal);
+    modalCancelBtn.addEventListener('click', closeModal);
+    modalCreateBtn.addEventListener('click', createFromModal);
+    groupModal.addEventListener('click', e => { if (e.target === groupModal) closeModal(); });
 
-    groupModal.addEventListener('click', (e) => {
-        if (e.target === groupModal) closeGroupModal();
-    });
+    // Model search
+    modelSearchInput.addEventListener('input', () => renderModelList(modelSearchInput.value));
 
-    modelSelectGrid.addEventListener('click', (e) => {
+    // Model selection
+    modelSelectGrid.addEventListener('click', e => {
         const item = e.target.closest('.model-select-item');
         if (item) toggleModelSelection(item.dataset.id);
     });
 
     // Resize
     window.addEventListener('resize', () => {
-        if (window.innerWidth >= 1024) {
-            sidebar.classList.remove('open');
-            sidebarOverlay.classList.remove('active');
-        }
+        if (window.innerWidth >= 1024) { sidebar.classList.remove('open'); sidebarOverlay.classList.remove('active'); }
     });
 }
 
